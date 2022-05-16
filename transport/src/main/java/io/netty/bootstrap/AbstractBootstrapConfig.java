@@ -34,6 +34,7 @@ public abstract class AbstractBootstrapConfig<B extends AbstractBootstrap<B, C>,
     protected final B bootstrap;
 
     protected AbstractBootstrapConfig(B bootstrap) {
+        //这里会将ServerBootstrap赋值给this.bootstrap
         this.bootstrap = ObjectUtil.checkNotNull(bootstrap, "bootstrap");
     }
 

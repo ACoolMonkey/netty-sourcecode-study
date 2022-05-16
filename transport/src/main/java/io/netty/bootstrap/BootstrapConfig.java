@@ -26,6 +26,7 @@ import java.net.SocketAddress;
 public final class BootstrapConfig extends AbstractBootstrapConfig<Bootstrap, Channel> {
 
     BootstrapConfig(Bootstrap bootstrap) {
+        //这里会一样调用AbstractBootstrapConfig的构造器，将Bootstrap赋值给AbstractBootstrapConfig.bootstrap
         super(bootstrap);
     }
 

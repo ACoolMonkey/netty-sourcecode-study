@@ -44,12 +44,16 @@ public class NioEventLoopGroup extends MultithreadEventLoopGroup {
      * 无参构造器
      */
     public NioEventLoopGroup() {
+        //这里nThreads会赋值为0
         this(0);
     }
 
     /**
      * Create a new instance using the specified number of threads, {@link ThreadFactory} and the
      * {@link SelectorProvider} which is returned by {@link SelectorProvider#provider()}.
+     */
+    /**
+     * 有参构造器
      */
     public NioEventLoopGroup(int nThreads) {
         this(nThreads, (Executor) null);

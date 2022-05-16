@@ -31,6 +31,10 @@ public class ReflectiveChannelFactory<T extends Channel> implements ChannelFacto
     public ReflectiveChannelFactory(Class<? extends T> clazz) {
         ObjectUtil.checkNotNull(clazz, "clazz");
         try {
+            /*
+            把NioServerSocketChannel或NioSocketChannel的空参数构造器赋值进constructor，
+            后续会通过反射的方式进行调用
+             */
             this.constructor = clazz.getConstructor();
         } catch (NoSuchMethodException e) {
             throw new IllegalArgumentException("Class " + StringUtil.simpleClassName(clazz) +

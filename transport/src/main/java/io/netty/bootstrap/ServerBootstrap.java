@@ -40,7 +40,6 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * {@link Bootstrap} sub-class which allows easy bootstrap of {@link ServerChannel}
- *
  */
 public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerChannel> {
 
@@ -54,7 +53,9 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
     private volatile EventLoopGroup childGroup;
     private volatile ChannelHandler childHandler;
 
-    public ServerBootstrap() { }
+    public ServerBootstrap() {
+        //这里虽然是空实现，但在ServerBootstrap类中会完成如下所示的初始化工作
+    }
 
     private ServerBootstrap(ServerBootstrap bootstrap) {
         super(bootstrap);
@@ -79,7 +80,12 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
      * {@link EventLoopGroup}'s are used to handle all the events and IO for {@link ServerChannel} and
      * {@link Channel}'s.
      */
+    /**
+     * ServerBootstrap中的bossGroup会赋值给AbstractBootstrap的group；
+     * 而workerGroup会赋值给ServerBootstrap的childGroup
+     */
     public ServerBootstrap group(EventLoopGroup parentGroup, EventLoopGroup childGroup) {
+        //会调用到AbstractBootstrap的group方法
         super.group(parentGroup);
         if (this.childGroup != null) {
             throw new IllegalStateException("childGroup set already");
@@ -123,7 +129,11 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
      * Set the {@link ChannelHandler} which is used to serve the request for the {@link Channel}'s.
      */
     public ServerBootstrap childHandler(ChannelHandler childHandler) {
-        this.childHandler = ObjectUtil.checkNotNull(childHandler, "childHandler");
+        /*
+        这里就是把传进来的ChannelInitializer赋值给childHandler，而我们在其中实现的initChannel方法
+        会在channel被注册时回调，ChannelInitializer实例会在initChannel方法执行完毕后被销毁
+        后续会看到这一点
+         */
         return this;
     }
 

@@ -37,6 +37,10 @@ public abstract class MultithreadEventLoopGroup extends MultithreadEventExecutor
     private static final int DEFAULT_EVENT_LOOP_THREADS;
 
     static {
+        /*
+        如果用户没有设置“io.netty.eventLoopThreads”和“io.netty.availableProcessors”这两个参数，
+        DEFAULT_EVENT_LOOP_THREADS的值就默认为当前JVM最大可用线程数*2（至少要为1）
+         */
         DEFAULT_EVENT_LOOP_THREADS = Math.max(1, SystemPropertyUtil.getInt(
                 "io.netty.eventLoopThreads", NettyRuntime.availableProcessors() * 2));
 
@@ -49,6 +53,10 @@ public abstract class MultithreadEventLoopGroup extends MultithreadEventExecutor
      * @see MultithreadEventExecutorGroup#MultithreadEventExecutorGroup(int, Executor, Object...)
      */
     protected MultithreadEventLoopGroup(int nThreads, Executor executor, Object... args) {
+        /*
+        从这里可以看到，如果是无参构造器，传进来的nThreads就是0，那么就会为DEFAULT_EVENT_LOOP_THREADS
+        而DEFAULT_EVENT_LOOP_THREADS值的初始化过程在下面，默认为当前JVM最大可用线程数*2
+         */
         super(nThreads == 0 ? DEFAULT_EVENT_LOOP_THREADS : nThreads, executor, args);
     }
 
@@ -64,7 +72,7 @@ public abstract class MultithreadEventLoopGroup extends MultithreadEventExecutor
      * EventExecutorChooserFactory, Object...)
      */
     protected MultithreadEventLoopGroup(int nThreads, Executor executor, EventExecutorChooserFactory chooserFactory,
-                                     Object... args) {
+                                        Object... args) {
         super(nThreads == 0 ? DEFAULT_EVENT_LOOP_THREADS : nThreads, executor, chooserFactory, args);
     }
 
