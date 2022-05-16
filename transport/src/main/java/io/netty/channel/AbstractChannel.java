@@ -297,8 +297,15 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
         return pipeline.write(msg, promise);
     }
 
+    /**
+     * 这里以服务端向客户端发送数据来举例
+     */
     @Override
     public ChannelFuture writeAndFlush(Object msg) {
+        /*
+        需要注意的是：这里拿到的pipeline就是在服务端有我们自定义handler的pipeline，
+        也就是NioServerSocketChannel的pipeline
+         */
         return pipeline.writeAndFlush(msg);
     }
 

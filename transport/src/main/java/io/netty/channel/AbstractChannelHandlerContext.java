@@ -739,6 +739,10 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
 
     private void invokeWrite0(Object msg, ChannelPromise promise) {
         try {
+            /*
+            这里拿到的handler是编码的handler，即StringEncoder、ObjectEncoder等等，
+            执行它写好的write方法就行了
+             */
             ((ChannelOutboundHandler) handler()).write(this, msg, promise);
         } catch (Throwable t) {
             notifyOutboundHandlerException(t, promise);
@@ -772,6 +776,10 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
 
     private void invokeFlush0() {
         try {
+            /*
+            这里的handler跟上面invokeWrite0方法的handler是同一个，也就是那个编码的handler，
+            执行它写好的flush方法即可（里面同时还会调用HeadContext的flush方法）
+             */
             ((ChannelOutboundHandler) handler()).flush(this);
         } catch (Throwable t) {
             invokeExceptionCaught(t);
@@ -786,6 +794,7 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
 
     void invokeWriteAndFlush(Object msg, ChannelPromise promise) {
         if (invokeHandler()) {
+            //这里就可以看到writeAndFlush方法是通过write和flush两个事件来执行的
             invokeWrite0(msg, promise);
             invokeFlush0();
         } else {
@@ -806,12 +815,14 @@ abstract class AbstractChannelHandlerContext implements ChannelHandlerContext, R
             throw e;
         }
 
+        //这里就是在找下一个执行写动作的outboundHandler
         final AbstractChannelHandlerContext next = findContextOutbound(flush ?
                 (MASK_WRITE | MASK_FLUSH) : MASK_WRITE);
         final Object m = pipeline.touch(msg, next);
         EventExecutor executor = next.executor();
         if (executor.inEventLoop()) {
             if (flush) {
+                //传进来的flush为true，所以走下面的方法
                 next.invokeWriteAndFlush(m, promise);
             } else {
                 next.invokeWrite(m, promise);

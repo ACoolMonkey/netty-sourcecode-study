@@ -1024,6 +1024,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
     @Override
     public final ChannelFuture writeAndFlush(Object msg) {
+        //因为是出站事件，所以从tail开始遍历所有的outboundHandler
         return tail.writeAndFlush(msg);
     }
 
