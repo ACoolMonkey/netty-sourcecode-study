@@ -161,6 +161,10 @@ public abstract class AbstractEventExecutor extends AbstractExecutorService impl
      */
     protected static void safeExecute(Runnable task) {
         try {
+            /*
+            这里也就是在真正执行任务的地方。现在已经搞清楚了任务是如何启动去执行的，而之前在register注册的时候
+            放入了一个注册任务，那么下面就来看一下这个任务具体的执行代码
+             */
             task.run();
         } catch (Throwable t) {
             logger.warn("A task raised an exception. Task: {}", task, t);
@@ -170,10 +174,10 @@ public abstract class AbstractEventExecutor extends AbstractExecutorService impl
     /**
      * Like {@link #execute(Runnable)} but does not guarantee the task will be run until either
      * a non-lazy task is executed or the executor is shut down.
-     *
+     * <p>
      * This is equivalent to submitting a {@link EventExecutor.LazyRunnable} to
      * {@link #execute(Runnable)} but for an arbitrary {@link Runnable}.
-     *
+     * <p>
      * The default implementation just delegates to {@link #execute(Runnable)}.
      */
     @UnstableApi
@@ -186,5 +190,6 @@ public abstract class AbstractEventExecutor extends AbstractExecutorService impl
      * but does not need to run immediately.
      */
     @UnstableApi
-    public interface LazyRunnable extends Runnable { }
+    public interface LazyRunnable extends Runnable {
+    }
 }

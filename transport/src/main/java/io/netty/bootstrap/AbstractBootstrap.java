@@ -248,6 +248,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     /**
      * Create a new {@link Channel} and bind it.
      */
+    /**
+     * 这里是服务端的bind方法
+     */
     public ChannelFuture bind(int inetPort) {
         return bind(new InetSocketAddress(inetPort));
     }
@@ -275,12 +278,14 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     }
 
     private ChannelFuture doBind(final SocketAddress localAddress) {
+        //完成channel的初始化和注册过程
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
         if (regFuture.cause() != null) {
             return regFuture;
         }
 
+        //该方法会返回false
         if (regFuture.isDone()) {
             // At this point we know that the registration was complete and successful.
             ChannelPromise promise = channel.newPromise();
@@ -302,6 +307,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
                         // See https://github.com/netty/netty/issues/2586
                         promise.registered();
 
+                        //这里也就是在做绑定端口的工作
                         doBind0(regFuture, channel, localAddress, promise);
                     }
                 }
@@ -310,9 +316,13 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         }
     }
 
+    /**
+     * 可以看到服务端和客户端都调用了initAndRegister方法，那么下面就来看一下其实现
+     */
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
+            //这里会调用到我们之前在channel方法中创建的ReflectiveChannelFactory的newChannel方法
             channel = channelFactory.newChannel();
             init(channel);
         } catch (Throwable t) {
@@ -326,6 +336,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             return new DefaultChannelPromise(new FailedChannel(), GlobalEventExecutor.INSTANCE).setFailure(t);
         }
 
+        //这里的group方法拿到的就是bossGroup 这里也就是在对channel进行注册
         ChannelFuture regFuture = config().group().register(channel);
         if (regFuture.cause() != null) {
             if (channel.isRegistered()) {
@@ -355,6 +366,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
 
         // This method is invoked before channelRegistered() is triggered.  Give user handlers a chance to set up
         // the pipeline in its channelRegistered() implementation.
+        //之前已经分析过了，看到“eventLoop().execute”这行代码就知道是创建了一个新任务放到了taskQueue中
         channel.eventLoop().execute(new Runnable() {
             @Override
             public void run() {
@@ -387,6 +399,10 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
      */
     @Deprecated
     public final EventLoopGroup group() {
+        /*
+        这里面的group就是之前在group方法中赋值的group，即bossGroup（服务端）
+        或者是workerGroup（客户端）
+         */
         return group;
     }
 

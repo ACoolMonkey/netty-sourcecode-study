@@ -146,6 +146,11 @@ public abstract class MultithreadEventExecutorGroup extends AbstractEventExecuto
 
     @Override
     public EventExecutor next() {
+        /*
+        在之前NioEventLoopGroup的构造器中，会根据executors的长度是否是2的幂来选择调用
+        PowerOfTwoEventExecutorChooser或GenericEventExecutorChooser，也就是这里
+        的chooser。此处会调用其next方法
+         */
         return chooser.next();
     }
 

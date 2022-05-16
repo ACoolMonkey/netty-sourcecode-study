@@ -76,18 +76,23 @@ public abstract class AbstractNioChannel extends AbstractChannel {
      * @param ch                the underlying {@link SelectableChannel} on which it operates
      * @param readInterestOp    the ops to set to receive data from the {@link SelectableChannel}
      */
+    /**
+     * NioServerSocketChannel和NioSocketChannel都会调用到此处
+     */
     protected AbstractNioChannel(Channel parent, SelectableChannel ch, int readInterestOp) {
         super(parent);
         this.ch = ch;
+        //把注册事件赋值给readInterestOp
         this.readInterestOp = readInterestOp;
         try {
+            //下面这行代码在NIO编程也是一样的，将ServerSocketChannel或SocketChannel配置为非阻塞模式
             ch.configureBlocking(false);
         } catch (IOException e) {
             try {
                 ch.close();
             } catch (IOException e2) {
                 logger.warn(
-                            "Failed to close a partially initialized socket.", e2);
+                        "Failed to close a partially initialized socket.", e2);
             }
 
             throw new ChannelException("Failed to enter non-blocking mode.", e);
@@ -254,6 +259,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
                     // Schedule connect timeout.
                     int connectTimeoutMillis = config().getConnectTimeoutMillis();
                     if (connectTimeoutMillis > 0) {
+                        //这里schedule方法会创建一个定时任务，之前遇到的都是execute方法，所以这里来具体看一下其是怎么实现的
                         connectTimeoutFuture = eventLoop().schedule(new Runnable() {
                             @Override
                             public void run() {
@@ -375,8 +381,9 @@ public abstract class AbstractNioChannel extends AbstractChannel {
     @Override
     protected void doRegister() throws Exception {
         boolean selected = false;
-        for (;;) {
+        for (; ; ) {
             try {
+                //这行话其实就对应于NIO编程中把ServerSocketChannel或SocketChannel注册到selector上
                 selectionKey = javaChannel().register(eventLoop().unwrappedSelector(), 0, this);
                 return;
             } catch (CancelledKeyException e) {
@@ -399,6 +406,10 @@ public abstract class AbstractNioChannel extends AbstractChannel {
         eventLoop().cancel(selectionKey());
     }
 
+    /**
+     * readIfIsAutoRead方法中又会从pipeline中从tail到head遍历执行所有outboundHandler的读事件，
+     * 之前已经分析过很多这样的流程了，这里就不再赘述了。所以下面就来看一下其中的关键代码：doBeginRead
+     */
     @Override
     protected void doBeginRead() throws Exception {
         // Channel.read() or ChannelHandlerContext.read() was called
@@ -411,6 +422,7 @@ public abstract class AbstractNioChannel extends AbstractChannel {
 
         final int interestOps = selectionKey.interestOps();
         if ((interestOps & readInterestOp) == 0) {
+            //这里可以看到跟NIO编程中一样，重新注册对OP_ACCEPT（服务端）或OP_READ（客户端）事件感兴趣
             selectionKey.interestOps(interestOps | readInterestOp);
         }
     }

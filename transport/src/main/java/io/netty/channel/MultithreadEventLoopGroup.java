@@ -91,6 +91,12 @@ public abstract class MultithreadEventLoopGroup extends MultithreadEventExecutor
 
     @Override
     public ChannelFuture register(Channel channel) {
+        /*
+        每调用一次本方法，就会用EventLoopGroup的下一个EventLoop来进行注册
+        如果看过下面我对“next().register(channel)”这行代码的分析后就可以明白：
+        这里实际上只会有一个线程来执行pipeline上的所有handler的事件，期间不会
+        进行线程的切换，避免了锁竞争。这里也就是Netty中无锁串行化的体现
+         */
         return next().register(channel);
     }
 

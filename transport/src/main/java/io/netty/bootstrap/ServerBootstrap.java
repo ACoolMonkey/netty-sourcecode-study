@@ -142,32 +142,54 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         setChannelOptions(channel, newOptionsArray(), logger);
         setAttributes(channel, attrs0().entrySet().toArray(EMPTY_ATTRIBUTE_ARRAY));
 
+        //拿到之前在newChannelPipeline方法里面设置好的pipeline
         ChannelPipeline p = channel.pipeline();
 
+        //拿到之前在group方法里面设置好的workerGroup
         final EventLoopGroup currentChildGroup = childGroup;
+        //拿到之前在childHandler方法里面设置好的childHandler
         final ChannelHandler currentChildHandler = childHandler;
         final Entry<ChannelOption<?>, Object>[] currentChildOptions;
+        //我在之前没有演示，但是如果调用childOption方法，这里获取的就是childOptions
         synchronized (childOptions) {
             currentChildOptions = childOptions.entrySet().toArray(EMPTY_OPTION_ARRAY);
         }
+        //我在之前没有演示，但是如果调用childAttr方法，这里获取的就是childAttrs
         final Entry<AttributeKey<?>, Object>[] currentChildAttrs = childAttrs.entrySet().toArray(EMPTY_ATTRIBUTE_ARRAY);
 
         p.addLast(new ChannelInitializer<Channel>() {
             @Override
             public void initChannel(final Channel ch) {
                 final ChannelPipeline pipeline = ch.pipeline();
+                //因为我们之前调用ServerBootstrap和Bootstrap的构造器都是空实现，所以这里获取到的handler也是null
                 ChannelHandler handler = config.handler();
                 if (handler != null) {
                     pipeline.addLast(handler);
                 }
 
+                /*
+                这里又调用了一次execute方法，将任务放到taskQueue中，然后等待runAllTasks方法去执行
+                之前已经分析了其具体执行过程，这里就不再次重复分析了
+                 */
                 ch.eventLoop().execute(new Runnable() {
                     @Override
                     public void run() {
+                        /*
+                        addLast方法在之前也已经分析过了，将ChannelHandler添加进pipeline中
+                        只不过之前添加的是ChannelInitializer，而这里添加的是ServerBootstrapAcceptor
+                        （添加之后ChannelInitializer的initChannel方法就走完了，然后在上面可以看到，
+                        会从pipeline中删除当前ChannelInitializer实例，所以目前服务端的pipeline
+                        中除了tail和head之外，就只剩下了ServerBootstrapAcceptor（需要注意的是：添加
+                        ServerBootstrapAcceptor是在另一个线程中完成的，主线程不一定能及时感知到这个变化））
+                         */
                         pipeline.addLast(new ServerBootstrapAcceptor(
                                 ch, currentChildGroup, currentChildHandler, currentChildOptions, currentChildAttrs));
                     }
                 });
+                /*
+                目前这条线就算是走完了，再来回到最开始的地方。我们刚才所有的分析都是从invokeHandlerAddedIfNeeded
+                方法里面进行展开的，现在该方法走完了，就继续走接下来的代码
+                 */
             }
         });
     }
@@ -217,14 +239,28 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         @Override
         @SuppressWarnings("unchecked")
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            //这里传进来的msg就是上面赋值进去的NioSocketChannel
             final Channel child = (Channel) msg;
 
+            /*
+            addLast方法之前已经分析过了，这里也就是把我们在服务端自定义的childHandler
+            放到了NioSocketChannel的pipeline中
+             */
             child.pipeline().addLast(childHandler);
 
             setChannelOptions(child, childOptions, logger);
             setAttributes(child, childAttrs);
 
             try {
+                /*
+                这里的register方法非常重要（之前已经分析过该方法的实现了），这里的作用也就是注册
+                NioSocketChannel到workerGroup的selector上，同时开启一个线程在select方法处被阻塞，
+                后续客户端的读写事件都会交由workerGroup来进行处理。也就是在Netty线程模型图中，
+                bossGroup和workerGroup中间连接的那条线的含义
+                同时，在之前register方法的分析中，我们知道它最终会回调我们自定义childHandler中的
+                ChannelInitializer中的的initChannel方法：也就是将我们自己写的所有handler都放到
+                workerGroup的pipeline中
+                 */
                 childGroup.register(child).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {
@@ -291,6 +327,10 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
 
     @Override
     public final ServerBootstrapConfig config() {
+        /*
+        这里直接返回了config，而config的赋值在一开始创建ServerBootstrap时就已经创建好了，
+        之前在分析ServerBootstrap的构造器中已经分析了这一点
+         */
         return config;
     }
 }

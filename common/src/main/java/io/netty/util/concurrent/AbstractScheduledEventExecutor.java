@@ -19,12 +19,12 @@ import io.netty.util.internal.DefaultPriorityQueue;
 import io.netty.util.internal.ObjectUtil;
 import io.netty.util.internal.PriorityQueue;
 
-import static io.netty.util.concurrent.ScheduledFutureTask.deadlineNanos;
-
 import java.util.Comparator;
 import java.util.Queue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+
+import static io.netty.util.concurrent.ScheduledFutureTask.deadlineNanos;
 
 /**
  * Abstract base class for {@link EventExecutor}s that want to support scheduling.
@@ -38,9 +38,10 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
                 }
             };
 
-   static final Runnable WAKEUP_TASK = new Runnable() {
-       @Override
-       public void run() { } // Do nothing
+    static final Runnable WAKEUP_TASK = new Runnable() {
+        @Override
+        public void run() {
+        } // Do nothing
     };
 
     PriorityQueue<ScheduledFutureTask<?>> scheduledTaskQueue;
@@ -61,6 +62,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
     /**
      * Given an arbitrary deadline {@code deadlineNanos}, calculate the number of nano seconds from now
      * {@code deadlineNanos} would expire.
+     *
      * @param deadlineNanos An arbitrary deadline in nano seconds.
      * @return the number of nano seconds from now {@code deadlineNanos} would expire.
      */
@@ -70,6 +72,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
 
     /**
      * The initial value used for delay and computations based upon a monatomic time source.
+     *
      * @return initial value used for delay and computations based upon a monatomic time source.
      */
     protected static long initialNanoTime() {
@@ -92,7 +95,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
 
     /**
      * Cancel all scheduled tasks.
-     *
+     * <p>
      * This method MUST be called only when {@link #inEventLoop()} is {@code true}.
      */
     protected void cancelScheduledTasks() {
@@ -105,7 +108,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
         final ScheduledFutureTask<?>[] scheduledTasks =
                 scheduledTaskQueue.toArray(new ScheduledFutureTask<?>[0]);
 
-        for (ScheduledFutureTask<?> task: scheduledTasks) {
+        for (ScheduledFutureTask<?> task : scheduledTasks) {
             task.cancelWithoutRemove(false);
         }
 
@@ -123,6 +126,9 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
      * Return the {@link Runnable} which is ready to be executed with the given {@code nanoTime}.
      * You should use {@link #nanoTime()} to retrieve the correct {@code nanoTime}.
      */
+    /**
+     * 从scheduledTaskQueue中拿走队头任务
+     */
     protected final Runnable pollScheduledTask(long nanoTime) {
         assert inEventLoop();
 
@@ -130,6 +136,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
         if (scheduledTask == null || scheduledTask.deadlineNanos() - nanoTime > 0) {
             return null;
         }
+        //如果peek获取的任务不为空或者没超时，就删除掉它，相当于拿走队头任务了
         scheduledTaskQueue.remove();
         scheduledTask.setConsumed();
         return scheduledTask;
@@ -154,6 +161,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
 
     final ScheduledFutureTask<?> peekScheduledTask() {
         Queue<ScheduledFutureTask<?>> scheduledTaskQueue = this.scheduledTaskQueue;
+        //从scheduledTaskQueue中获取队头任务
         return scheduledTaskQueue != null ? scheduledTaskQueue.peek() : null;
     }
 
@@ -169,6 +177,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
     public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
         ObjectUtil.checkNotNull(command, "command");
         ObjectUtil.checkNotNull(unit, "unit");
+        //delay非负处理
         if (delay < 0) {
             delay = 0;
         }
@@ -248,10 +257,12 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
 
     final void scheduleFromEventLoop(final ScheduledFutureTask<?> task) {
         // nextTaskId a long and so there is no chance it will overflow back to 0
+        //这里实际上就是将任务放在了定时任务队列中，后续再去等线程执行runAllTasks方法，把任务拿出来再执行
         scheduledTaskQueue().add(task.setId(++nextTaskId));
     }
 
     private <V> ScheduledFuture<V> schedule(final ScheduledFutureTask<V> task) {
+        //同之前的分析，该方法会返回true
         if (inEventLoop()) {
             scheduleFromEventLoop(task);
         } else {
@@ -291,7 +302,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
      * to wake the {@link EventExecutor} thread if required.
      *
      * @param deadlineNanos deadline of the to-be-scheduled task
-     *     relative to {@link AbstractScheduledEventExecutor#nanoTime()}
+     *                      relative to {@link AbstractScheduledEventExecutor#nanoTime()}
      * @return {@code true} if the {@link EventExecutor} thread should be woken, {@code false} otherwise
      */
     protected boolean beforeScheduledTaskSubmitted(long deadlineNanos) {
@@ -302,7 +313,7 @@ public abstract class AbstractScheduledEventExecutor extends AbstractEventExecut
      * See {@link #beforeScheduledTaskSubmitted(long)}. Called only after that method returns false.
      *
      * @param deadlineNanos relative to {@link AbstractScheduledEventExecutor#nanoTime()}
-     * @return  {@code true} if the {@link EventExecutor} thread should be woken, {@code false} otherwise
+     * @return {@code true} if the {@link EventExecutor} thread should be woken, {@code false} otherwise
      */
     protected boolean afterScheduledTaskSubmitted(long deadlineNanos) {
         return true;

@@ -432,14 +432,22 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         }
     }
 
+    /**
+     * （注：以下的代码应该算是Netty中比较核心的代码了。但可惜的是，该代码的可读性非常差，嵌套了
+     * 大量的try-catch和if-else。我查阅了该处代码的初始几次提交者是Trustin Lee（Netty原作者）
+     * 和Norman Maurer，那个时候的run方法就已经嵌套了很多的if-else了-_-我能想到这里需要考虑
+     * 很多复杂的场景，但是应该会有一种更好的实现方式）
+     */
     @Override
     protected void run() {
         int selectCnt = 0;
+        //这里的死循环也就是在Netty线程模型图中，NioEventLoop画圈循环执行的含义
         for (; ; ) {
             try {
                 int strategy;
                 try {
                     strategy = selectStrategy.calculateStrategy(selectNowSupplier, hasTasks());
+                    //下面的代码就可以理解为在NIO编程中处理各种事件的代码
                     switch (strategy) {
                         case SelectStrategy.CONTINUE:
                             continue;
@@ -572,7 +580,21 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         }
     }
 
+    /**
+     * 这里也就是在Netty线程模型图中NioEventLoop循环所做的第二件事：processSelectedKeys
+     * 跟NIO编程一样，如果有事件来临的时候，会把该事件放在selectedKeys集合中，也就会执行本方法
+     * 如果没有事件来临，该方法不会被调用
+     * （注：我建议processSelectedKey方法放在最后再看、等服务端走完所有的流程后再看比较好
+     * 现在可以先过掉这个方法，直接去看第三件事：runAllTasks方法的实现。因为processSelectedKey
+     * 方法本身就是服务端初始化完成后，客户端发起事件时才会调用的方法。如果现在就看下面的分析的话，
+     * 可能有些东西会不理解（我下面对processSelectedKeys方法的分析也是建立在看完了服务端所有初始化
+     * 流程后的基础上，再进行分析的））
+     */
     private void processSelectedKeys() {
+        /*
+        在之前NioEventLoopGroup的构造器中，已经对selectedKeys进行了初始化，所以这里会走
+        processSelectedKeysOptimized方法中
+         */
         if (selectedKeys != null) {
             processSelectedKeysOptimized();
         } else {
@@ -640,6 +662,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
 
     private void processSelectedKeysOptimized() {
         for (int i = 0; i < selectedKeys.size; ++i) {
+            //处理集合中的每一个selectedKey
             final SelectionKey k = selectedKeys.keys[i];
             // null out entry in the array to allow to have it GC'ed once the Channel close
             // See https://github.com/netty/netty/issues/2363
@@ -693,6 +716,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             int readyOps = k.readyOps();
             // We first need to call finishConnect() before try to trigger a read(...) or write(...) as otherwise
             // the NIO JDK channel implementation may throw a NotYetConnectedException.
+            //处理OP_CONNECT事件
             if ((readyOps & SelectionKey.OP_CONNECT) != 0) {
                 // remove OP_CONNECT as otherwise Selector.select(..) will always return without blocking
                 // See https://github.com/netty/netty/issues/924
@@ -704,6 +728,7 @@ public final class NioEventLoop extends SingleThreadEventLoop {
             }
 
             // Process OP_WRITE first as we may be able to write some queued buffers and so free memory.
+            //处理OP_WRITE事件
             if ((readyOps & SelectionKey.OP_WRITE) != 0) {
                 // Call forceFlush which will also take care of clear the OP_WRITE once there is nothing left to write
                 ch.unsafe().forceFlush();
@@ -711,7 +736,12 @@ public final class NioEventLoop extends SingleThreadEventLoop {
 
             // Also check for readOps of 0 to workaround possible JDK bug which may otherwise lead
             // to a spin loop
+            //处理OP_READ或OP_ACCEPT事件
             if ((readyOps & (SelectionKey.OP_READ | SelectionKey.OP_ACCEPT)) != 0 || readyOps == 0) {
+                /*
+                这里来着重研究一下read方法（OP_ACCEPT事件是客户端连接服务端传来的事件，
+                而OP_READ表示服务端和客户端收到彼此传来的读事件）
+                 */
                 unsafe.read();
             }
         } catch (CancelledKeyException ignored) {
@@ -799,12 +829,20 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         return selector.selectNow();
     }
 
+    /**
+     * 这里也就是在Netty线程模型图中NioEventLoop循环所做的第一件事：select
+     */
     private int select(long deadlineNanos) throws IOException {
         if (deadlineNanos == NONE) {
+            /*
+            可以看到这里就是在调用NIO编程中的select方法，如果没有客户端来的时候，本方法会一直阻塞在这里
+            （从这里又可以再一次看出：Netty就是对NIO的一种复杂封装，但是使用起来会很简单）
+             */
             return selector.select();
         }
         // Timeout will only be 0 if deadline is within 5 microsecs
         long timeoutMillis = deadlineToDelayNanos(deadlineNanos + 995000L) / 1000000L;
+        //这里会调用NIO编程中有时间限制的select方法
         return timeoutMillis <= 0 ? selector.selectNow() : selector.select(timeoutMillis);
     }
 

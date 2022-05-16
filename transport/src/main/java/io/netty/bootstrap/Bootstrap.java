@@ -127,6 +127,9 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
     /**
      * Connect a {@link Channel} to the remote peer.
      */
+    /**
+     * 这里是客户端的connect方法
+     */
     public ChannelFuture connect(InetAddress inetHost, int inetPort) {
         return connect(new InetSocketAddress(inetHost, inetPort));
     }
@@ -152,7 +155,11 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
     /**
      * @see #connect()
      */
+    /**
+     * 分析完服务端的doBind方法后，现在来分析一下客户端的doResolveAndConnect方法
+     */
     private ChannelFuture doResolveAndConnect(final SocketAddress remoteAddress, final SocketAddress localAddress) {
+        //完成channel的初始化和注册过程
         final ChannelFuture regFuture = initAndRegister();
         final Channel channel = regFuture.channel();
 
@@ -244,6 +251,7 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
         // This method is invoked before channelRegistered() is triggered.  Give user handlers a chance to set up
         // the pipeline in its channelRegistered() implementation.
         final Channel channel = connectPromise.channel();
+        //同上，新创建了一个任务放到了taskQueue中
         channel.eventLoop().execute(new Runnable() {
             @Override
             public void run() {
@@ -257,6 +265,9 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
         });
     }
 
+    /**
+     * （这里是客户端和服务端不一样的地方）
+     */
     @Override
     @SuppressWarnings("unchecked")
     void init(Channel channel) {
@@ -293,8 +304,15 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
         return bs;
     }
 
+    /**
+     * （这里是客户端和服务端不一样的地方）
+     */
     @Override
     public final BootstrapConfig config() {
+        /*
+        这里直接返回了config，而config的赋值在一开始创建Bootstrap时就已经创建好了，
+        之前在分析Bootstrap的构造器中已经分析了这一点
+         */
         return config;
     }
 

@@ -26,10 +26,11 @@ import static io.netty.util.internal.PriorityQueueNode.INDEX_NOT_IN_QUEUE;
 /**
  * A priority queue which uses natural ordering of elements. Elements are also required to be of type
  * {@link PriorityQueueNode} for the purpose of maintaining the index in the priority queue.
+ *
  * @param <T> The object that is maintained in the queue.
  */
 public final class DefaultPriorityQueue<T extends PriorityQueueNode> extends AbstractQueue<T>
-                                                                     implements PriorityQueue<T> {
+        implements PriorityQueue<T> {
     private static final PriorityQueueNode[] EMPTY_ARRAY = new PriorityQueueNode[0];
     private final Comparator<T> comparator;
     private T[] queue;
@@ -38,6 +39,7 @@ public final class DefaultPriorityQueue<T extends PriorityQueueNode> extends Abs
     @SuppressWarnings("unchecked")
     public DefaultPriorityQueue(Comparator<T> comparator, int initialSize) {
         this.comparator = ObjectUtil.checkNotNull(comparator, "comparator");
+        //这里可以看到创建了一个Netty自己定义的优先级队列（继承了java.util.AbstractQueue）
         queue = (T[]) (initialSize != 0 ? new PriorityQueueNode[initialSize] : EMPTY_ARRAY);
     }
 
@@ -94,8 +96,8 @@ public final class DefaultPriorityQueue<T extends PriorityQueueNode> extends Abs
             // Use a policy which allows for a 0 initial capacity. Same policy as JDK's priority queue, double when
             // "small", then grow by 50% when "large".
             queue = Arrays.copyOf(queue, queue.length + ((queue.length < 64) ?
-                                                         (queue.length + 2) :
-                                                         (queue.length >>> 1)));
+                    (queue.length + 2) :
+                    (queue.length >>> 1)));
         }
 
         bubbleUp(size++, e);

@@ -50,17 +50,14 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     private static final String HEAD_NAME = generateName0(HeadContext.class);
     private static final String TAIL_NAME = generateName0(TailContext.class);
 
-    private static final FastThreadLocal<Map<Class<?>, String>> nameCaches =
-            new FastThreadLocal<Map<Class<?>, String>>() {
+    private static final FastThreadLocal<Map<Class<?>, String>> nameCaches = new FastThreadLocal<Map<Class<?>, String>>() {
         @Override
         protected Map<Class<?>, String> initialValue() {
             return new WeakHashMap<Class<?>, String>();
         }
     };
 
-    private static final AtomicReferenceFieldUpdater<DefaultChannelPipeline, MessageSizeEstimator.Handle> ESTIMATOR =
-            AtomicReferenceFieldUpdater.newUpdater(
-                    DefaultChannelPipeline.class, MessageSizeEstimator.Handle.class, "estimatorHandle");
+    private static final AtomicReferenceFieldUpdater<DefaultChannelPipeline, MessageSizeEstimator.Handle> ESTIMATOR = AtomicReferenceFieldUpdater.newUpdater(DefaultChannelPipeline.class, MessageSizeEstimator.Handle.class, "estimatorHandle");
     final AbstractChannelHandlerContext head;
     final AbstractChannelHandlerContext tail;
 
@@ -76,7 +73,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     /**
      * This is the head of a linked list that is processed by {@link #callHandlerAddedForAllHandlers()} and so process
      * all the pending {@link #callHandlerAdded0(AbstractChannelHandlerContext)}.
-     *
+     * <p>
      * We only keep the head because it is expected that the list is used infrequently and its size is small.
      * Thus full iterations to do insertions is assumed to be a good compromised to saving memory and tail management
      * complexity.
@@ -92,11 +89,16 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     protected DefaultChannelPipeline(Channel channel) {
         this.channel = ObjectUtil.checkNotNull(channel, "channel");
         succeededFuture = new SucceededChannelFuture(channel, null);
-        voidPromise =  new VoidChannelPromise(channel, true);
+        voidPromise = new VoidChannelPromise(channel, true);
 
+        /*
+        这里可以看到初始化了pipeline中的head和tail的handler（HeadContext和TailContext本身就是
+        一个ChannelHandler），而之后如果要加ChannelHandler的话，会在tail之前加入
+         */
         tail = new TailContext(this);
         head = new HeadContext(this);
 
+        //head和tail指针互相指向
         head.next = tail;
         tail.prev = head;
     }
@@ -142,6 +144,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
         return childExecutor;
     }
+
     @Override
     public final Channel channel() {
         return channel;
@@ -201,6 +204,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         synchronized (this) {
             checkMultiplicity(handler);
 
+            //把传进来的ChannelInitializer（服务端）封装为一个ChannelHandlerContext
             newCtx = newContext(group, filterName(name, handler), handler);
 
             addLast0(newCtx);
@@ -224,6 +228,9 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return this;
     }
 
+    /**
+     * 从本方法就可以看出：新添加的ChannelHandlerContext会放在tail之前
+     */
     private void addLast0(AbstractChannelHandlerContext newCtx) {
         AbstractChannelHandlerContext prev = tail.prev;
         newCtx.prev = prev;
@@ -238,8 +245,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     }
 
     @Override
-    public final ChannelPipeline addBefore(
-            EventExecutorGroup group, String baseName, String name, ChannelHandler handler) {
+    public final ChannelPipeline addBefore(EventExecutorGroup group, String baseName, String name, ChannelHandler handler) {
         final AbstractChannelHandlerContext newCtx;
         final AbstractChannelHandlerContext ctx;
         synchronized (this) {
@@ -291,8 +297,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     }
 
     @Override
-    public final ChannelPipeline addAfter(
-            EventExecutorGroup group, String baseName, String name, ChannelHandler handler) {
+    public final ChannelPipeline addAfter(EventExecutorGroup group, String baseName, String name, ChannelHandler handler) {
         final AbstractChannelHandlerContext newCtx;
         final AbstractChannelHandlerContext ctx;
 
@@ -347,13 +352,13 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
 
         int size;
-        for (size = 1; size < handlers.length; size ++) {
+        for (size = 1; size < handlers.length; size++) {
             if (handlers[size] == null) {
                 break;
             }
         }
 
-        for (int i = size - 1; i >= 0; i --) {
+        for (int i = size - 1; i >= 0; i--) {
             ChannelHandler h = handlers[i];
             addFirst(executor, null, h);
         }
@@ -365,6 +370,9 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return addLast(null, handler);
     }
 
+    /**
+     * 可以看到服务端和客户端都调用了addLast方法，那么下面就来看一下其实现（以服务端来举例）
+     */
     @Override
     public final ChannelPipeline addLast(ChannelHandler... handlers) {
         return addLast(null, handlers);
@@ -374,7 +382,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     public final ChannelPipeline addLast(EventExecutorGroup executor, ChannelHandler... handlers) {
         ObjectUtil.checkNotNull(handlers, "handlers");
 
-        for (ChannelHandler h: handlers) {
+        for (ChannelHandler h : handlers) {
             if (h == null) {
                 break;
             }
@@ -397,7 +405,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         // any name conflicts.  Note that we don't cache the names generated here.
         if (context0(name) != null) {
             String baseName = name.substring(0, name.length() - 1); // Strip the trailing '0'.
-            for (int i = 1;; i ++) {
+            for (int i = 1; ; i++) {
                 String newName = baseName + i;
                 if (context0(newName) == null) {
                     name = newName;
@@ -517,13 +525,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
     @Override
     @SuppressWarnings("unchecked")
-    public final <T extends ChannelHandler> T replace(
-            Class<T> oldHandlerType, String newName, ChannelHandler newHandler) {
+    public final <T extends ChannelHandler> T replace(Class<T> oldHandlerType, String newName, ChannelHandler newHandler) {
         return (T) replace(getContextOrDie(oldHandlerType), newName, newHandler);
     }
 
-    private ChannelHandler replace(
-            final AbstractChannelHandlerContext ctx, String newName, ChannelHandler newHandler) {
+    private ChannelHandler replace(final AbstractChannelHandlerContext ctx, String newName, ChannelHandler newHandler) {
         assert ctx != head && ctx != tail;
 
         final AbstractChannelHandlerContext newCtx;
@@ -596,9 +602,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         if (handler instanceof ChannelHandlerAdapter) {
             ChannelHandlerAdapter h = (ChannelHandlerAdapter) handler;
             if (!h.isSharable() && h.added) {
-                throw new ChannelPipelineException(
-                        h.getClass().getName() +
-                        " is not a @Sharable handler, so can't be added or removed multiple times.");
+                throw new ChannelPipelineException(h.getClass().getName() + " is not a @Sharable handler, so can't be added or removed multiple times.");
             }
             h.added = true;
         }
@@ -620,13 +624,9 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             }
 
             if (removed) {
-                fireExceptionCaught(new ChannelPipelineException(
-                        ctx.handler().getClass().getName() +
-                        ".handlerAdded() has thrown an exception; removed.", t));
+                fireExceptionCaught(new ChannelPipelineException(ctx.handler().getClass().getName() + ".handlerAdded() has thrown an exception; removed.", t));
             } else {
-                fireExceptionCaught(new ChannelPipelineException(
-                        ctx.handler().getClass().getName() +
-                        ".handlerAdded() has thrown an exception; also failed to remove.", t));
+                fireExceptionCaught(new ChannelPipelineException(ctx.handler().getClass().getName() + ".handlerAdded() has thrown an exception; also failed to remove.", t));
             }
         }
     }
@@ -636,8 +636,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         try {
             ctx.callHandlerRemoved();
         } catch (Throwable t) {
-            fireExceptionCaught(new ChannelPipelineException(
-                    ctx.handler().getClass().getName() + ".handlerRemoved() has thrown an exception.", t));
+            fireExceptionCaught(new ChannelPipelineException(ctx.handler().getClass().getName() + ".handlerRemoved() has thrown an exception.", t));
         }
     }
 
@@ -647,6 +646,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             firstRegistration = false;
             // We are now registered to the EventLoop. It's time to call the callbacks for the ChannelHandlers,
             // that were added before the registration was done.
+            //之前说过，当channel被注册时会回调initChannel方法，所以这里就是在做这件事
             callHandlerAddedForAllHandlers();
         }
     }
@@ -718,7 +718,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         ObjectUtil.checkNotNull(handler, "handler");
 
         AbstractChannelHandlerContext ctx = head.next;
-        for (;;) {
+        for (; ; ) {
 
             if (ctx == null) {
                 return null;
@@ -737,7 +737,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         ObjectUtil.checkNotNull(handlerType, "handlerType");
 
         AbstractChannelHandlerContext ctx = head.next;
-        for (;;) {
+        for (; ; ) {
             if (ctx == null) {
                 return null;
             }
@@ -752,7 +752,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     public final List<String> names() {
         List<String> list = new ArrayList<String>();
         AbstractChannelHandlerContext ctx = head.next;
-        for (;;) {
+        for (; ; ) {
             if (ctx == null) {
                 return list;
             }
@@ -765,7 +765,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     public final Map<String, ChannelHandler> toMap() {
         Map<String, ChannelHandler> map = new LinkedHashMap<String, ChannelHandler>();
         AbstractChannelHandlerContext ctx = head.next;
-        for (;;) {
+        for (; ; ) {
             if (ctx == tail) {
                 return map;
             }
@@ -784,20 +784,14 @@ public class DefaultChannelPipeline implements ChannelPipeline {
      */
     @Override
     public final String toString() {
-        StringBuilder buf = new StringBuilder()
-            .append(StringUtil.simpleClassName(this))
-            .append('{');
+        StringBuilder buf = new StringBuilder().append(StringUtil.simpleClassName(this)).append('{');
         AbstractChannelHandlerContext ctx = head.next;
-        for (;;) {
+        for (; ; ) {
             if (ctx == tail) {
                 break;
             }
 
-            buf.append('(')
-               .append(ctx.name())
-               .append(" = ")
-               .append(ctx.handler().getClass().getName())
-               .append(')');
+            buf.append('(').append(ctx.name()).append(" = ").append(ctx.handler().getClass().getName()).append(')');
 
             ctx = ctx.next;
             if (ctx == tail) {
@@ -810,6 +804,9 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         return buf.toString();
     }
 
+    /**
+     * 该方法实现的就是通过遍历pipeline中的每一个inboundHandler，执行其channelRegistered方法
+     */
     @Override
     public final ChannelPipeline fireChannelRegistered() {
         AbstractChannelHandlerContext.invokeChannelRegistered(head);
@@ -825,11 +822,11 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     /**
      * Removes all handlers from the pipeline one by one from tail (exclusive) to head (exclusive) to trigger
      * handlerRemoved().
-     *
+     * <p>
      * Note that we traverse up the pipeline ({@link #destroyUp(AbstractChannelHandlerContext, boolean)})
      * before traversing down ({@link #destroyDown(Thread, AbstractChannelHandlerContext, boolean)}) so that
      * the handlers are removed after all events are handled.
-     *
+     * <p>
      * See: https://github.com/netty/netty/issues/3156
      */
     private synchronized void destroy() {
@@ -839,7 +836,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     private void destroyUp(AbstractChannelHandlerContext ctx, boolean inEventLoop) {
         final Thread currentThread = Thread.currentThread();
         final AbstractChannelHandlerContext tail = this.tail;
-        for (;;) {
+        for (; ; ) {
             if (ctx == tail) {
                 destroyDown(currentThread, tail.prev, inEventLoop);
                 break;
@@ -865,7 +862,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     private void destroyDown(Thread currentThread, AbstractChannelHandlerContext ctx, boolean inEventLoop) {
         // We have reached at tail; now traverse backwards.
         final AbstractChannelHandlerContext head = this.head;
-        for (;;) {
+        for (; ; ) {
             if (ctx == head) {
                 break;
             }
@@ -892,6 +889,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
     @Override
     public final ChannelPipeline fireChannelActive() {
+        //这里和channelRegistered事件的执行过程是类似的，从pipeline中head到tail执行所有的inboundHandler
         AbstractChannelHandlerContext.invokeChannelActive(head);
         return this;
     }
@@ -975,12 +973,16 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
     @Override
     public final ChannelFuture connect(SocketAddress remoteAddress, ChannelPromise promise) {
+        /*
+        不出意外的话，又是从pipeline中从tail到head遍历执行所有outboundHandler的connect事件
+        （注：既然有这么多pipeline中inbound、outbound的遍历执行的地方，为什么不抽象成两个公有的实现？
+        通过传入不同的事件来实现不同的功能？）
+         */
         return tail.connect(remoteAddress, promise);
     }
 
     @Override
-    public final ChannelFuture connect(
-            SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) {
+    public final ChannelFuture connect(SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) {
         return tail.connect(remoteAddress, localAddress, promise);
     }
 
@@ -1149,10 +1151,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
      */
     protected void onUnhandledInboundException(Throwable cause) {
         try {
-            logger.warn(
-                    "An exceptionCaught() event was fired, and it reached at the tail of the pipeline. " +
-                            "It usually means the last handler in the pipeline did not handle the exception.",
-                    cause);
+            logger.warn("An exceptionCaught() event was fired, and it reached at the tail of the pipeline. " + "It usually means the last handler in the pipeline did not handle the exception.", cause);
         } finally {
             ReferenceCountUtil.release(cause);
         }
@@ -1179,9 +1178,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
      */
     protected void onUnhandledInboundMessage(Object msg) {
         try {
-            logger.debug(
-                    "Discarded inbound message {} that reached at the tail of the pipeline. " +
-                            "Please check your pipeline configuration.", msg);
+            logger.debug("Discarded inbound message {} that reached at the tail of the pipeline. " + "Please check your pipeline configuration.", msg);
         } finally {
             ReferenceCountUtil.release(msg);
         }
@@ -1195,8 +1192,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     protected void onUnhandledInboundMessage(ChannelHandlerContext ctx, Object msg) {
         onUnhandledInboundMessage(msg);
         if (logger.isDebugEnabled()) {
-            logger.debug("Discarded message pipeline : {}. Channel : {}.",
-                         ctx.pipeline().names(), ctx.channel());
+            logger.debug("Discarded message pipeline : {}. Channel : {}.", ctx.pipeline().names(), ctx.channel());
         }
     }
 
@@ -1255,10 +1251,12 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
 
         @Override
-        public void channelRegistered(ChannelHandlerContext ctx) { }
+        public void channelRegistered(ChannelHandlerContext ctx) {
+        }
 
         @Override
-        public void channelUnregistered(ChannelHandlerContext ctx) { }
+        public void channelUnregistered(ChannelHandlerContext ctx) {
+        }
 
         @Override
         public void channelActive(ChannelHandlerContext ctx) {
@@ -1276,10 +1274,12 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
 
         @Override
-        public void handlerAdded(ChannelHandlerContext ctx) { }
+        public void handlerAdded(ChannelHandlerContext ctx) {
+        }
 
         @Override
-        public void handlerRemoved(ChannelHandlerContext ctx) { }
+        public void handlerRemoved(ChannelHandlerContext ctx) {
+        }
 
         @Override
         public void userEventTriggered(ChannelHandlerContext ctx, Object evt) {
@@ -1302,8 +1302,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
     }
 
-    final class HeadContext extends AbstractChannelHandlerContext
-            implements ChannelOutboundHandler, ChannelInboundHandler {
+    final class HeadContext extends AbstractChannelHandlerContext implements ChannelOutboundHandler, ChannelInboundHandler {
 
         private final Unsafe unsafe;
 
@@ -1329,16 +1328,12 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         }
 
         @Override
-        public void bind(
-                ChannelHandlerContext ctx, SocketAddress localAddress, ChannelPromise promise) {
+        public void bind(ChannelHandlerContext ctx, SocketAddress localAddress, ChannelPromise promise) {
             unsafe.bind(localAddress, promise);
         }
 
         @Override
-        public void connect(
-                ChannelHandlerContext ctx,
-                SocketAddress remoteAddress, SocketAddress localAddress,
-                ChannelPromise promise) {
+        public void connect(ChannelHandlerContext ctx, SocketAddress remoteAddress, SocketAddress localAddress, ChannelPromise promise) {
             unsafe.connect(remoteAddress, localAddress, promise);
         }
 
@@ -1377,9 +1372,22 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             ctx.fireExceptionCaught(cause);
         }
 
+        /**
+         * 因为传进来的是head，所以这里调用的是HeadContext的channelRegistered方法
+         */
         @Override
         public void channelRegistered(ChannelHandlerContext ctx) {
+            /*
+            invokeHandlerAddedIfNeeded方法之前已经分析过了，但是这里并不会具体执行后续的
+            callHandlerAddedForAllHandlers，因为在之前的调用过程中已经把firstRegistration
+            置为false了，所以这里不会再调用了，相当于是个空方法
+             */
             invokeHandlerAddedIfNeeded();
+            /*
+            这里是调用下一个inboundHandler的channelRegistered方法。如果是TailContext的话，就会去执行
+            它的channelRegistered方法。但是TailContext的channelRegistered方法是一个空实现，所以这里
+            就不再具体展开分析了，调用的流程都是和HeadContext类似的
+             */
             ctx.fireChannelRegistered();
         }
 
@@ -1393,8 +1401,16 @@ public class DefaultChannelPipeline implements ChannelPipeline {
             }
         }
 
+        /**
+         * 因为传进来的是head，所以这里调用的是HeadContext的channelActive方法
+         */
         @Override
         public void channelActive(ChannelHandlerContext ctx) {
+            /*
+            这里是调用下一个inboundHandler的channelActive方法。如果是TailContext的话，就会去执行
+            它的channelActive方法。但是TailContext的channelActive方法是一个空实现，所以这里
+            就不再具体展开分析了，调用的流程都是和HeadContext类似的
+             */
             ctx.fireChannelActive();
 
             readIfIsAutoRead();
@@ -1407,6 +1423,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
 
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            //可以看到HeadContext的channelRead事件没有做什么事，只是调用了下一个handler的channelRead事件
             ctx.fireChannelRead(msg);
         }
 
@@ -1459,6 +1476,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         @Override
         void execute() {
             EventExecutor executor = ctx.executor();
+            //inEventLoop方法在之前的doStartThread方法里面已经对thread赋值成当前线程了，所以这里肯定返回true
             if (executor.inEventLoop()) {
                 callHandlerAdded0(ctx);
             } else {
@@ -1466,9 +1484,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
                     executor.execute(this);
                 } catch (RejectedExecutionException e) {
                     if (logger.isWarnEnabled()) {
-                        logger.warn(
-                                "Can't invoke handlerAdded() as the EventExecutor {} rejected it, removing handler {}.",
-                                executor, ctx.name(), e);
+                        logger.warn("Can't invoke handlerAdded() as the EventExecutor {} rejected it, removing handler {}.", executor, ctx.name(), e);
                     }
                     atomicRemoveFromHandlerList(ctx);
                     ctx.setRemoved();
@@ -1498,9 +1514,7 @@ public class DefaultChannelPipeline implements ChannelPipeline {
                     executor.execute(this);
                 } catch (RejectedExecutionException e) {
                     if (logger.isWarnEnabled()) {
-                        logger.warn(
-                                "Can't invoke handlerRemoved() as the EventExecutor {} rejected it," +
-                                        " removing handler {}.", executor, ctx.name(), e);
+                        logger.warn("Can't invoke handlerRemoved() as the EventExecutor {} rejected it," + " removing handler {}.", executor, ctx.name(), e);
                     }
                     // remove0(...) was call before so just call AbstractChannelHandlerContext.setRemoved().
                     ctx.setRemoved();

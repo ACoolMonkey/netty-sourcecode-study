@@ -79,6 +79,7 @@ public abstract class AbstractBootstrapConfig<B extends AbstractBootstrap<B, C>,
      */
     @SuppressWarnings("deprecation")
     public final EventLoopGroup group() {
+        //这里返回的就是ServerBootstrap或Bootstrap中的group方法
         return bootstrap.group();
     }
 

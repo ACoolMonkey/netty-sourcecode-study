@@ -70,6 +70,11 @@ public final class DefaultEventExecutorChooserFactory implements EventExecutorCh
 
         @Override
         public EventExecutor next() {
+            /*
+            executors也就是之前在NioEventLoopGroup的构造器中赋值进去的children。这里就是在拿取
+            executors数组中的下一个EventExecutor。因为其长度为2的幂，所以可以用按位与的优化写法
+            来同样达到取余的效果（在HashMap和ConcurrentHashMap中也出现了同样的取余优化写法）
+             */
             return executors[idx.getAndIncrement() & executors.length - 1];
         }
     }
@@ -85,6 +90,12 @@ public final class DefaultEventExecutorChooserFactory implements EventExecutorCh
 
         @Override
         public EventExecutor next() {
+            /*
+            同上面的解释，这里就是当executors的长度不是2的幂的时候，使用常规的“%”取余符号来进行拿取下一个
+            EventExecutor的方式。之所以这里会取绝对值是为了防止出现数据溢出的情况：当idx递增到一个特别大
+            的数：2147483647，那么此时再+1就变成了-2147483648，就变成了一个负数。而数组的索引位置
+            是不可能出现负数的（如果为负数就会抛出数组索引越界异常），所以在这里会做一次取绝对值的操作
+             */
             return executors[Math.abs(idx.getAndIncrement() % executors.length)];
         }
     }

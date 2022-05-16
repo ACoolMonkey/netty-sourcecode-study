@@ -44,13 +44,18 @@ import java.util.Map;
  * NIO selector based implementation to accept new connections.
  */
 public class NioServerSocketChannel extends AbstractNioMessageChannel
-                             implements io.netty.channel.socket.ServerSocketChannel {
+        implements io.netty.channel.socket.ServerSocketChannel {
 
     private static final ChannelMetadata METADATA = new ChannelMetadata(false, 16);
     private static final SelectorProvider DEFAULT_SELECTOR_PROVIDER = SelectorProvider.provider();
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(NioServerSocketChannel.class);
 
+    /**
+     * 这里可以看到通过newSocket方法来生成了一个ServerSocketChannel。而本方法的返回值
+     * ServerSocketChannel不就是NIO的ServerSocketChannel吗？所以这里就可以看出
+     * NioServerSocketChannel就是对原生NIO的ServerSocketChannel的包装
+     */
     private static ServerSocketChannel newSocket(SelectorProvider provider) {
         try {
             /**
@@ -86,6 +91,7 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
      * Create a new instance using the given {@link ServerSocketChannel}.
      */
     public NioServerSocketChannel(ServerSocketChannel channel) {
+        //这里的OP_ACCEPT正是在之前NIO编程中，对ServerSocketChannel注册OP_ACCEPT事件的相关代码
         super(null, channel, SelectionKey.OP_ACCEPT);
         config = new NioServerSocketChannelConfig(this, javaChannel().socket());
     }
@@ -130,6 +136,10 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
     @SuppressJava6Requirement(reason = "Usage guarded by java version check")
     @Override
     protected void doBind(SocketAddress localAddress) throws Exception {
+        /*
+        这里会根据Java不同的版本来执行不同的绑定代码。而看到“javaChannel()”就知道这里会走到NIO编程中的代码里了，
+        也就是NIO编程中的绑定端口的代码
+         */
         if (PlatformDependent.javaVersion() >= 7) {
             javaChannel().bind(localAddress, config.getBacklog());
         } else {
@@ -148,6 +158,10 @@ public class NioServerSocketChannel extends AbstractNioMessageChannel
 
         try {
             if (ch != null) {
+                /*
+                把当前客户端的NioSocketChannel加入到readBuf中（之前分析过，NioSocketChannel
+                构造器中会把OP_READ事件赋值进去，并且配置为非阻塞）
+                 */
                 buf.add(new NioSocketChannel(this, ch));
                 return 1;
             }
